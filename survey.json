@@ -6,26 +6,25 @@
   "questions": [
     {
       "key": "projectName",
+      "type": "input",
       "title": "What is the name of your project?",
       "description": "This will be used in multiple places, so make sure it's a good name.",
-      "required": true,
-      "type": "input"
+      "required": true
     },
     {
       "key": "outDir",
+      "type": "input",
       "title": "Where do you want the files?",
       "description": "This is the directory where the files will be generated.\nIt should be a relative path from the current directory.",
-      "type": "input",
-      "required": true,
+      "default": "./",
       "placeholder": "./path/to/your/project",
-      "default": "./"
+      "required": true
     },
     {
       "key": "architectures",
+      "type": "multiselect",
       "title": "What architectures do you want to support?",
       "description": "This will generate a project that supports multiple architectures.\nYou can choose one or more of the following options.",
-      "type": "multiselect",
-      "required": true,
       "options": [
         {
           "key": "amd64 (x86_64)",
@@ -34,7 +33,8 @@
         {
           "value": "arm64"
         }
-      ]
+      ],
+      "required": true
     }
   ]
 }
