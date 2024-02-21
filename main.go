@@ -216,7 +216,7 @@ func NewSurvey(path string) (Survey, error) {
 	}
 
 	if s.Output != "" && s.Output != "-" {
-		// Load the answers
+		// Read the answers
 		a, err := readAnswers(s.Output)
 		if err != nil {
 			return s, err
@@ -241,6 +241,11 @@ func fileType(path string) string {
 
 func readAnswers(path string) (map[string]interface{}, error) {
 	o := map[string]interface{}{}
+
+	// Check if the file exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return o, nil
+	}
 
 	// Read the file
 	b, err := os.ReadFile(path)
