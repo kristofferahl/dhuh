@@ -151,6 +151,7 @@ func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 
 		if s.answers != nil {
 			if sel, ok := s.answers[q.Key].([]interface{}); ok {
+				value = value[:0]
 				for _, v := range sel {
 					if v == o.Value {
 						selected = true
