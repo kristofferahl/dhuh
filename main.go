@@ -58,17 +58,17 @@ func (a *FieldValueAccessor) Value() interface{} {
 }
 
 func (s *Survey) Run() error {
-	fileds := make([]huh.Field, 0)
+	fields := make([]huh.Field, 0)
 
 	header := huh.NewNote().
 		Title(fmt.Sprintf("%s, version %s", s.Name, s.Version)).
 		Description(fmt.Sprintf("Reading questions from %s, writing answers to %s\n\n%s", s.path, s.Output, s.Description))
 
-	fileds = append(fileds, header)
+	fields = append(fields, header)
 
 	for _, q := range s.Questions {
 		if q.Type == "input" {
-			fileds = append(fileds, s.NewInputField(q))
+			fields = append(fields, s.NewInputField(q))
 		}
 
 		if q.Type == "text" {
@@ -80,7 +80,7 @@ func (s *Survey) Run() error {
 		}
 
 		if q.Type == "multiselect" {
-			fileds = append(fileds, s.NewMultiSelectField(q))
+			fields = append(fields, s.NewMultiSelectField(q))
 		}
 
 		if q.Type == "confirm" {
@@ -89,7 +89,7 @@ func (s *Survey) Run() error {
 	}
 
 	form := huh.NewForm(
-		huh.NewGroup(fileds...),
+		huh.NewGroup(fields...),
 	)
 
 	return form.Run()
