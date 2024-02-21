@@ -46,5 +46,10 @@
       "description": "This will add some extra files to your project.",
       "default": false
     }
-  ]
+  ],
+  "summary": true,
+  "confirm": {
+    "title": "Summary",
+    "description": "Above is a summary of your choices. Was this what you had in mind?"
+  }
 }

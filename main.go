@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,6 +26,8 @@ type Survey struct {
 	Description string      `yaml:"description" json:"description"`
 	Output      string      `yaml:"output" json:"output"`
 	Questions   []*Question `yaml:"questions" json:"questions"`
+	Summary     bool        `yaml:"summary" json:"summary"`
+	Confirm     Confirm     `yaml:"confirm" json:"confirm"`
 }
 
 type Question struct {
@@ -43,6 +47,11 @@ type SelectOption struct {
 	Key      string `yaml:"key" json:"key"`
 	Value    string `yaml:"value" json:"value"`
 	Selected bool   `yaml:"selected" json:"selected"`
+}
+
+type Confirm struct {
+	Title       string `yaml:"title" json:"title"`
+	Description string `yaml:"description" json:"description"`
 }
 
 type Answer interface {
@@ -306,6 +315,64 @@ func readAnswers(path string) (map[string]interface{}, error) {
 	return o, nil
 }
 
+func writeSummary(s Survey) {
+	w := os.Stdout
+	re := lipgloss.NewRenderer(w)
+	headerStyle := re.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Align(lipgloss.Center)
+	cellStyle := re.NewStyle().Padding(0, 1).Width(14)
+	oddRowStyle := cellStyle.Copy().Foreground(lipgloss.Color("245"))
+	evenRowStyle := cellStyle.Copy().Foreground(lipgloss.Color("242"))
+	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	qColWidth := 20
+	aColWidht := 20
+	kColWidth := 20
+	rows := [][]string{}
+
+	for _, q := range s.Questions {
+		answer := fmt.Sprintf("%v", q.answer.Value())
+		rows = append(rows, []string{q.Title, answer, q.Key})
+		if len(q.Title) > qColWidth {
+			qColWidth = len(q.Title) + 4
+		}
+		if len(answer) > aColWidht {
+			aColWidht = len(answer) + 4
+		}
+		if len(q.Key) > kColWidth {
+			kColWidth = len(q.Key) + 4
+		}
+	}
+
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(borderStyle).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			var style lipgloss.Style
+			switch {
+			case row == 0:
+				return headerStyle
+			case row%2 == 0:
+				style = evenRowStyle
+			default:
+				style = oddRowStyle
+			}
+
+			switch col {
+			case 0:
+				style = style.Copy().Width(qColWidth)
+			case 1:
+				style = style.Copy().Width(aColWidht)
+			case 2:
+				style = style.Copy().Width(kColWidth)
+			}
+			return style
+		}).
+		Headers("Question", "Answer", "Key").
+		Rows(rows...)
+
+	fmt.Fprintln(w, t)
+	fmt.Fprintln(w)
+}
+
 func main() {
 	path := "survey.yaml"
 	if len(os.Args) > 1 {
@@ -319,6 +386,26 @@ func main() {
 
 	if err := s.Run(); err != nil {
 		log.Fatal(err)
+	}
+
+	if s.Summary {
+		writeSummary(s)
+	}
+
+	ok := true
+	if len(s.Confirm.Title) > 0 {
+		confirm := huh.NewConfirm().
+			Title(s.Confirm.Title).
+			Description(s.Confirm.Description).
+			Value(&ok)
+
+		if err := confirm.Run(); err != nil {
+			log.Fatal(err)
+		}
+
+		if !ok {
+			return
+		}
 	}
 
 	a, err := s.Answers()
