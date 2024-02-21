@@ -1,0 +1,40 @@
+{
+  "name": "Scaffolding fun",
+  "version": "1.0.0",
+  "description": "This is a fun survey to scaffold a new project.\nIt will ask you a few questions and then generate a new project for you.\n",
+  "output": "answers.json",
+  "questions": [
+    {
+      "key": "projectName",
+      "title": "What is the name of your project?",
+      "description": "This will be used in multiple places, so make sure it's a good name.",
+      "required": true,
+      "type": "input"
+    },
+    {
+      "key": "outDir",
+      "title": "Where do you want the files?",
+      "description": "This is the directory where the files will be generated.\nIt should be a relative path from the current directory.",
+      "type": "input",
+      "required": true,
+      "placeholder": "./path/to/your/project",
+      "default": "./"
+    },
+    {
+      "key": "architectures",
+      "title": "What architectures do you want to support?",
+      "description": "This will generate a project that supports multiple architectures.\nYou can choose one or more of the following options.",
+      "type": "multiselect",
+      "required": true,
+      "options": [
+        {
+          "key": "amd64 (x86_64)",
+          "value": "amd64"
+        },
+        {
+          "value": "arm64"
+        }
+      ]
+    }
+  ]
+}
