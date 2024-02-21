@@ -24,6 +24,7 @@ No real plan has formulated yet, but there are some key things missing
 - Support for missing field types provided by huh
 - Command for reading (and formatting) answers
 - Validation
+- vhs demo
 
 More ideas
 
