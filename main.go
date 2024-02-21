@@ -58,13 +58,13 @@ func (a *FieldValueAccessor) Value() interface{} {
 }
 
 func (s *Survey) Run() error {
-	fmt.Printf("%s, version %s\n", s.Name, s.Version)
-	fmt.Printf("Reading questions from %s, writing to %s\n", s.path, s.Output)
-	fmt.Println()
-	fmt.Println(s.Description)
-	fmt.Println()
-
 	fileds := make([]huh.Field, 0)
+
+	header := huh.NewNote().
+		Title(fmt.Sprintf("%s, version %s", s.Name, s.Version)).
+		Description(fmt.Sprintf("Reading questions from %s, writing answers to %s\n\n%s", s.path, s.Output, s.Description))
+
+	fileds = append(fileds, header)
 
 	for _, q := range s.Questions {
 		if q.Type == "input" {
@@ -146,9 +146,9 @@ func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 		Description(q.Description).
 		Options(options...).
 		Value(&value).
-		Validate(func(s []string) error {
-			if q.Required && len(s) == 0 {
-				return fmt.Errorf("at least 1 answer is required")
+		Validate(func(t []string) error {
+			if q.Required && len(t) <= 0 {
+				return fmt.Errorf("at least one items is required")
 			}
 			return nil
 		})
