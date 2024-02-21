@@ -84,7 +84,7 @@ func (s *Survey) Run() error {
 		}
 
 		if q.Type == "confirm" {
-			// TODO
+			fields = append(fields, s.NewConfirmField(q))
 		}
 	}
 
@@ -165,6 +165,26 @@ func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 			}
 			return nil
 		})
+
+	q.answer = &FieldValueAccessor{value: field.GetValue}
+	return field
+}
+
+func (s Survey) NewConfirmField(q *Question) huh.Field {
+	value := false
+	switch q.Default.(type) {
+	case bool:
+		value = q.Default.(bool)
+	}
+	if s.answers != nil {
+		if a, ok := s.answers[q.Key].(bool); ok {
+			value = a
+		}
+	}
+	field := huh.NewConfirm().
+		Title(q.Title).
+		Description(q.Description).
+		Value(&value)
 
 	q.answer = &FieldValueAccessor{value: field.GetValue}
 	return field

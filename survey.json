@@ -38,6 +38,13 @@
         "arm64"
       ],
       "required": true
+    },
+    {
+      "key": "extras",
+      "type": "confirm",
+      "title": "Do you want to sprinkle some secrete sause on top?",
+      "description": "This will add some extra files to your project.",
+      "default": false
     }
   ]
 }
