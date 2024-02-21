@@ -32,4 +32,6 @@ questions:
       - key: amd64 (x86_64)
         value: amd64
       - value: arm64
+    default:
+      - arm64
     required: true

@@ -34,6 +34,9 @@
           "value": "arm64"
         }
       ],
+      "default": [
+        "arm64"
+      ],
       "required": true
     }
   ]

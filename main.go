@@ -33,7 +33,7 @@ type Question struct {
 	Description string         `yaml:"description" json:"description"`
 	Required    bool           `yaml:"required" json:"required"`
 	Placeholder string         `yaml:"placeholder,omitempty" json:"placeholder,omitempty"`
-	Default     string         `yaml:"default,omitempty" json:"default,omitempty"`
+	Default     interface{}    `yaml:"default,omitempty" json:"default,omitempty"`
 	Options     []SelectOption `yaml:"options,omitempty" json:"options,omitempty"`
 
 	answer Answer
@@ -96,7 +96,11 @@ func (s *Survey) Run() error {
 }
 
 func (s Survey) NewInputField(q *Question) huh.Field {
-	value := q.Default
+	value := ""
+	switch q.Default.(type) {
+	case string:
+		value = q.Default.(string)
+	}
 	if s.answers != nil {
 		if a, ok := s.answers[q.Key].(string); ok {
 			value = a
@@ -119,6 +123,15 @@ func (s Survey) NewInputField(q *Question) huh.Field {
 
 func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 	value := make([]string, 0)
+	switch q.Default.(type) {
+	case []interface{}:
+		df := q.Default.([]interface{})
+		for _, v := range df {
+			if s, ok := v.(string); ok {
+				value = append(value, s)
+			}
+		}
+	}
 	options := make([]huh.Option[string], 0)
 	for _, o := range q.Options {
 		k := o.Key
