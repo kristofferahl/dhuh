@@ -1,55 +1,110 @@
 {
-  "name": "Scaffolding fun",
+  "name": "Scaffolding for fun",
   "version": "1.0.0",
-  "description": "This is a fun survey to scaffold a new project.\nIt will ask you a few questions and then generate a new project for you.\n",
+  "description": "This is a fun survey to scaffold a new project.\nIt will ask you a few questions and then generate a new project for you.",
+  "theme": "charm",
+  "accessible": false,
   "output": "answers.json",
-  "questions": [
+  "forms": [
     {
-      "key": "projectName",
-      "type": "input",
-      "title": "What is the name of your project?",
-      "description": "This will be used in multiple places, so make sure it's a good name.",
-      "required": true
-    },
-    {
-      "key": "outDir",
-      "type": "input",
-      "title": "Where do you want the files?",
-      "description": "This is the directory where the files will be generated.\nIt should be a relative path from the current directory.",
-      "default": "./",
-      "placeholder": "./path/to/your/project",
-      "required": true
-    },
-    {
-      "key": "architectures",
-      "type": "multiselect",
-      "title": "What architectures do you want to support?",
-      "description": "This will generate a project that supports multiple architectures.\nYou can choose one or more of the following options.",
-      "options": [
+      "groups": [
         {
-          "key": "amd64 (x86_64)",
-          "value": "amd64"
-        },
-        {
-          "value": "arm64"
+          "title": "Project",
+          "description": "Describe your project",
+          "fields": [
+            {
+              "key": "projectName",
+              "type": "input",
+              "title": "What is the name of your project?",
+              "description": "This will be used in multiple places, so make sure it's a good name.\n",
+              "required": true
+            },
+            {
+              "key": "projectDescription",
+              "type": "text",
+              "title": "What is the purpose of your project?",
+              "description": "Describe how your project is going to be used. Try to make it short and to the point.\n",
+              "required": true
+            },
+            {
+              "key": "cloudProvider",
+              "type": "select",
+              "title": "What cloud provider are you targeting?",
+              "description": "This will help us generate the right files for your project.\n",
+              "options": [
+                {
+                  "key": "Amazon Web Services",
+                  "value": "aws"
+                },
+                {
+                  "key": "Microsoft Azure",
+                  "value": "azure"
+                },
+                {
+                  "key": "Google Cloud Platform",
+                  "value": "gcp"
+                },
+                {
+                  "key": "Digital Ocean",
+                  "value": "do"
+                }
+              ],
+              "default": "gcp",
+              "required": true
+            }
+          ]
         }
-      ],
-      "default": [
-        "arm64"
-      ],
-      "required": true
+      ]
     },
     {
-      "key": "extras",
-      "type": "confirm",
-      "title": "Do you want to sprinkle some secrete sause on top?",
-      "description": "This will add some extra files to your project.",
-      "default": false
+      "groups": [
+        {
+          "title": "Options",
+          "description": "Choose some options",
+          "fields": [
+            {
+              "key": "outDir",
+              "type": "input",
+              "title": "Where do you want the files?",
+              "description": "This is the directory where the files will be generated.\nIt should be a relative path from the current directory.\n",
+              "default": "./{{ index . \"projectName\" }}/",
+              "placeholder": "./path/to/your/project",
+              "required": true
+            },
+            {
+              "key": "architectures",
+              "type": "multiselect",
+              "title": "What architectures do you want to support?",
+              "description": "This will generate a project that supports multiple architectures.\nYou can choose one or more of the following options.\n",
+              "options": [
+                {
+                  "key": "amd64 (x86_64)",
+                  "value": "amd64"
+                },
+                {
+                  "value": "arm64"
+                }
+              ],
+              "default": [
+                "arm64"
+              ],
+              "required": true
+            },
+            {
+              "key": "secretSauce",
+              "type": "confirm",
+              "title": "Do you want to sprinkle some secrete sause on top?",
+              "description": "This will add some extra files to your project.\n",
+              "default": false
+            }
+          ]
+        }
+      ]
     }
   ],
   "summary": true,
   "confirm": {
     "title": "Summary",
-    "description": "Above is a summary of your choices. Was this what you had in mind?"
+    "description": "Above is a summary of your choices. Was this what you had in mind?\n"
   }
 }

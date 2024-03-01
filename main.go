@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
 	"strings"
@@ -13,6 +15,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	DefaultTheme = "charm"
+)
+
 var (
 	ErrUnsupportedFileExtension = fmt.Errorf("unsupported file extension, only .yaml, .yml and .json are supported")
 )
@@ -21,16 +27,50 @@ type Survey struct {
 	path    string
 	answers map[string]interface{}
 
-	Name        string      `yaml:"name" json:"name"`
-	Version     string      `yaml:"version" json:"version"`
-	Description string      `yaml:"description" json:"description"`
-	Output      string      `yaml:"output" json:"output"`
-	Questions   []*Question `yaml:"questions" json:"questions"`
-	Summary     bool        `yaml:"summary" json:"summary"`
-	Confirm     Confirm     `yaml:"confirm" json:"confirm"`
+	Name        string  `yaml:"name" json:"name"`
+	Version     string  `yaml:"version" json:"version"`
+	Description string  `yaml:"description" json:"description"`
+	Theme       string  `yaml:"theme" json:"theme"`
+	Accessible  bool    `yaml:"accessible" json:"accessible"`
+	Output      string  `yaml:"output" json:"output"`
+	Forms       []*Form `yaml:"forms" json:"forms"`
+	Summary     bool    `yaml:"summary" json:"summary"`
+	Confirm     Confirm `yaml:"confirm" json:"confirm"`
 }
 
-type Question struct {
+type Form struct {
+	Groups []*Group `yaml:"groups" json:"groups"`
+}
+
+func (f *Form) ValueFields() []*Field {
+	fields := make([]*Field, 0)
+	for _, g := range f.Groups {
+		fields = append(fields, g.ValueFields()...)
+	}
+	return fields
+}
+
+type Group struct {
+	Title       string   `yaml:"title" json:"title"`
+	Description string   `yaml:"description" json:"description"`
+	Fields      []*Field `yaml:"fields" json:"fields"`
+}
+
+func (g *Group) ValueFields() []*Field {
+	fields := make([]*Field, 0)
+	for _, f := range g.Fields {
+		switch f.Type {
+		case "note":
+			continue
+		default:
+			fields = append(fields, f)
+		}
+	}
+	return fields
+}
+
+type Field struct {
+	ref         huh.Field
 	Key         string         `yaml:"key" json:"key"`
 	Type        string         `yaml:"type" json:"type"`
 	Title       string         `yaml:"title" json:"title"`
@@ -39,8 +79,6 @@ type Question struct {
 	Placeholder string         `yaml:"placeholder,omitempty" json:"placeholder,omitempty"`
 	Default     interface{}    `yaml:"default,omitempty" json:"default,omitempty"`
 	Options     []SelectOption `yaml:"options,omitempty" json:"options,omitempty"`
-
-	answer Answer
 }
 
 type SelectOption struct {
@@ -54,95 +92,147 @@ type Confirm struct {
 	Description string `yaml:"description" json:"description"`
 }
 
-type Answer interface {
-	Value() interface{}
-}
-
-type FieldValueAccessor struct {
-	value func() interface{}
-}
-
-func (a *FieldValueAccessor) Value() interface{} {
-	return a.value()
-}
-
 func (s *Survey) Run() error {
-	fields := make([]huh.Field, 0)
+	theme := getTheme(s.Theme)
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(strings.TrimSpace(fmt.Sprintf("%s, version %s", s.Name, s.Version))).
+				Description(strings.TrimSpace(fmt.Sprintf("Reading questions from %s, writing answers to %s\n\n%s", s.path, s.Output, s.Description))),
+		),
+	).WithTheme(&theme).WithAccessible(s.Accessible)
 
-	header := huh.NewNote().
-		Title(fmt.Sprintf("%s, version %s", s.Name, s.Version)).
-		Description(fmt.Sprintf("Reading questions from %s, writing answers to %s\n\n%s", s.path, s.Output, s.Description))
+	if err := form.Run(); err != nil {
+		return err
+	}
 
-	fields = append(fields, header)
+	for _, f := range s.Forms {
+		var groups []*huh.Group
 
-	for _, q := range s.Questions {
-		if q.Type == "input" {
-			fields = append(fields, s.NewInputField(q))
+		for _, g := range f.Groups {
+			fields := make([]huh.Field, 0)
+
+			for _, field := range g.Fields {
+				switch field.Type {
+				case "note":
+					fields = append(fields, s.NewNoteField(field))
+				case "input":
+					fields = append(fields, s.NewInputField(field))
+				case "text":
+					fields = append(fields, s.NewTextField(field))
+				case "select":
+					fields = append(fields, s.NewSelectField(field))
+				case "multiselect":
+					fields = append(fields, s.NewMultiSelectField(field))
+				case "confirm":
+					fields = append(fields, s.NewConfirmField(field))
+				default:
+					return fmt.Errorf("unsupported field type: %s", field.Type)
+				}
+			}
+
+			if len(fields) > 0 {
+				groups = append(groups, huh.NewGroup(fields...).Title(g.Title).Description(g.Description))
+			}
 		}
 
-		if q.Type == "text" {
-			// TODO
-		}
+		if len(groups) > 0 {
+			// Collect answers for the form
+			form := huh.NewForm(groups...).WithTheme(&theme).WithAccessible(s.Accessible)
+			if err := form.Run(); err != nil {
+				return err
+			}
 
-		if q.Type == "select" {
-			// TODO
-		}
-
-		if q.Type == "multiselect" {
-			fields = append(fields, s.NewMultiSelectField(q))
-		}
-
-		if q.Type == "confirm" {
-			fields = append(fields, s.NewConfirmField(q))
+			// Store the answers
+			for _, field := range f.ValueFields() {
+				s.answers[field.Key] = field.ref.GetValue()
+			}
 		}
 	}
 
-	form := huh.NewForm(
-		huh.NewGroup(fields...),
-	)
-
-	return form.Run()
+	return nil
 }
 
-func (s Survey) NewInputField(q *Question) huh.Field {
+func (s Survey) NewNoteField(f *Field) huh.Field {
+	field := huh.NewNote().
+		Title(strings.TrimSpace(f.Title)).
+		Description(strings.TrimSpace(f.Description))
+	f.ref = field
+	return field
+}
+
+func (s Survey) NewInputField(f *Field) huh.Field {
 	value := ""
-	switch q.Default.(type) {
+	switch f.Default.(type) {
 	case string:
-		value = q.Default.(string)
+		value = f.Default.(string)
+		v, err := s.ParseTemplate(value, f.Key)
+		if err != nil {
+			panic(err)
+		}
+		value = v
 	}
 	if s.answers != nil {
-		if a, ok := s.answers[q.Key].(string); ok {
+		if a, ok := s.answers[f.Key].(string); ok {
 			value = a
 		}
 	}
+	// TODO: Add support for password
 	field := huh.NewInput().
-		Title(q.Title).
-		Description(q.Description).
-		Placeholder(q.Placeholder).
+		Title(strings.TrimSpace(f.Title)).
+		Description(strings.TrimSpace(f.Description)).
+		Placeholder(f.Placeholder).
 		Value(&value).
 		Validate(func(s string) error {
-			if q.Required && s == "" {
+			if f.Required && s == "" {
 				return fmt.Errorf("value is required")
 			}
 			return nil
 		})
-	q.answer = &FieldValueAccessor{value: field.GetValue}
+	f.ref = field
 	return field
 }
 
-func (s Survey) NewMultiSelectField(q *Question) huh.Field {
-	value := make([]string, 0)
-	switch q.Default.(type) {
-	case []interface{}:
-		df := q.Default.([]interface{})
-		for _, v := range df {
-			if s, ok := v.(string); ok {
-				value = append(value, s)
-			}
+func (s Survey) NewTextField(f *Field) huh.Field {
+	value := ""
+	switch f.Default.(type) {
+	case string:
+		value = f.Default.(string)
+		v, err := s.ParseTemplate(value, f.Key)
+		if err != nil {
+			panic(err)
+		}
+		value = v
+	}
+	if s.answers != nil {
+		if a, ok := s.answers[f.Key].(string); ok {
+			value = a
 		}
 	}
+	field := huh.NewText().
+		Title(strings.TrimSpace(f.Title)).
+		Description(strings.TrimSpace(f.Description)).
+		Placeholder(f.Placeholder).
+		Value(&value).
+		Validate(func(s string) error {
+			if f.Required && s == "" {
+				return fmt.Errorf("value is required")
+			}
+			return nil
+		})
+	f.ref = field
+	return field
+}
+
+func (s Survey) NewSelectField(f *Field) huh.Field {
+	value := ""
+	switch f.Default.(type) {
+	case string:
+		df := f.Default.(string)
+		value = df
+	}
 	options := make([]huh.Option[string], 0)
-	for _, o := range q.Options {
+	for _, o := range f.Options {
 		k := o.Key
 		if k == "" {
 			k = o.Value
@@ -150,7 +240,57 @@ func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 		selected := o.Selected
 
 		if s.answers != nil {
-			if sel, ok := s.answers[q.Key].([]interface{}); ok {
+			if sel, ok := s.answers[f.Key].([]interface{}); ok {
+				value = value[:0]
+				for _, v := range sel {
+					if v == o.Value {
+						selected = true
+						break
+					}
+				}
+			}
+		}
+
+		options = append(options, huh.NewOption[string](k, o.Value).Selected(selected))
+	}
+
+	field := huh.NewSelect[string]().
+		Title(strings.TrimSpace(f.Title)).
+		Description(strings.TrimSpace(f.Description)).
+		Options(options...).
+		Value(&value).
+		Validate(func(s string) error {
+			if f.Required && len(s) <= 0 {
+				return fmt.Errorf("a single item is required")
+			}
+			return nil
+		})
+
+	f.ref = field
+	return field
+}
+
+func (s Survey) NewMultiSelectField(f *Field) huh.Field {
+	value := make([]string, 0)
+	switch f.Default.(type) {
+	case []interface{}:
+		df := f.Default.([]interface{})
+		for _, v := range df {
+			if s, ok := v.(string); ok {
+				value = append(value, s)
+			}
+		}
+	}
+	options := make([]huh.Option[string], 0)
+	for _, o := range f.Options {
+		k := o.Key
+		if k == "" {
+			k = o.Value
+		}
+		selected := o.Selected
+
+		if s.answers != nil {
+			if sel, ok := s.answers[f.Key].([]interface{}); ok {
 				value = value[:0]
 				for _, v := range sel {
 					if v == o.Value {
@@ -165,46 +305,69 @@ func (s Survey) NewMultiSelectField(q *Question) huh.Field {
 	}
 
 	field := huh.NewMultiSelect[string]().
-		Title(q.Title).
-		Description(q.Description).
+		Title(strings.TrimSpace(f.Title)).
+		Description(strings.TrimSpace(f.Description)).
 		Options(options...).
 		Value(&value).
 		Validate(func(t []string) error {
-			if q.Required && len(t) <= 0 {
+			if f.Required && len(t) <= 0 {
 				return fmt.Errorf("at least one items is required")
 			}
 			return nil
 		})
 
-	q.answer = &FieldValueAccessor{value: field.GetValue}
+	f.ref = field
 	return field
 }
 
-func (s Survey) NewConfirmField(q *Question) huh.Field {
+func (s Survey) NewConfirmField(f *Field) huh.Field {
 	value := false
-	switch q.Default.(type) {
+	switch f.Default.(type) {
 	case bool:
-		value = q.Default.(bool)
+		value = f.Default.(bool)
 	}
 	if s.answers != nil {
-		if a, ok := s.answers[q.Key].(bool); ok {
+		if a, ok := s.answers[f.Key].(bool); ok {
 			value = a
 		}
 	}
 	field := huh.NewConfirm().
-		Title(q.Title).
-		Description(q.Description).
+		Title(f.Title).
+		Description(strings.TrimSpace(f.Description)).
 		Value(&value)
 
-	q.answer = &FieldValueAccessor{value: field.GetValue}
+	f.ref = field
 	return field
+}
+
+func (s *Survey) ParseTemplate(value string, key string) (string, error) {
+	if len(value) < 1 {
+		return value, nil
+	}
+
+	tmpl, err := template.New(key).Parse(value)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, s.answers)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
 
 func (s *Survey) Answers() ([]byte, error) {
 	o := map[string]interface{}{}
 
-	for _, q := range s.Questions {
-		o[q.Key] = q.answer.Value()
+	for _, f := range s.Forms {
+		for _, g := range f.Groups {
+			for _, field := range g.Fields {
+				o[field.Key] = field.ref.GetValue()
+			}
+		}
 	}
 
 	path := s.Output
@@ -233,7 +396,8 @@ func (s *Survey) Answers() ([]byte, error) {
 
 func NewSurvey(path string) (Survey, error) {
 	s := Survey{
-		path: path,
+		path:    path,
+		answers: map[string]interface{}{},
 	}
 
 	// Read the file
@@ -316,30 +480,62 @@ func readAnswers(path string) (map[string]interface{}, error) {
 	return o, nil
 }
 
-func writeSummary(s Survey) {
+func getTheme(name string) huh.Theme {
+	if name == "" {
+		name = DefaultTheme
+	}
+	switch name {
+	case "base":
+		return *huh.ThemeBase()
+	case "base16":
+		return *huh.ThemeBase16()
+	case "charm":
+		return *huh.ThemeCharm()
+	case "catppuccin":
+		return *huh.ThemeCatppuccin()
+	case "dracula":
+		return *huh.ThemeDracula()
+	default:
+		panic(fmt.Errorf("unsupported theme: %s", name))
+	}
+}
+
+func writeGroupSummary(g *Group, theme *huh.Theme) {
 	w := os.Stdout
 	re := lipgloss.NewRenderer(w)
-	headerStyle := re.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Align(lipgloss.Center)
-	cellStyle := re.NewStyle().Padding(0, 1).Width(14)
+	titleStyle := re.NewStyle().Inherit(theme.Focused.Title)
+	descriptionStyle := re.NewStyle().Inherit(theme.Focused.Description)
+	baseStyle := re.NewStyle()
+
+	headerStyle := titleStyle.Copy().Bold(true).Align(lipgloss.Center)
+	cellStyle := baseStyle.Copy().Padding(0, 1).Width(14)
 	oddRowStyle := cellStyle.Copy().Foreground(lipgloss.Color("245"))
 	evenRowStyle := cellStyle.Copy().Foreground(lipgloss.Color("242"))
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	borderStyle := descriptionStyle.Copy()
 	qColWidth := 20
 	aColWidht := 20
 	kColWidth := 20
 	rows := [][]string{}
 
-	for _, q := range s.Questions {
-		answer := fmt.Sprintf("%v", q.answer.Value())
-		rows = append(rows, []string{q.Title, answer, q.Key})
-		if len(q.Title) > qColWidth {
-			qColWidth = len(q.Title) + 4
+	if g.Title != "" {
+		text := titleStyle.Render(g.Title)
+		if g.Description != "" {
+			text = fmt.Sprintf("%s - %s", titleStyle.Render(g.Title), descriptionStyle.Render(g.Description))
+		}
+		fmt.Fprintln(w, text)
+	}
+
+	for _, field := range g.ValueFields() {
+		answer := fmt.Sprintf("%v", field.ref.GetValue())
+		rows = append(rows, []string{field.Title, answer, field.Key})
+		if len(field.Title) > qColWidth {
+			qColWidth = len(field.Title) + 4
 		}
 		if len(answer) > aColWidht {
 			aColWidht = len(answer) + 4
 		}
-		if len(q.Key) > kColWidth {
-			kColWidth = len(q.Key) + 4
+		if len(field.Key) > kColWidth {
+			kColWidth = len(field.Key) + 4
 		}
 	}
 
@@ -389,18 +585,27 @@ func main() {
 		log.Fatal(err)
 	}
 
+	surveyTheme := getTheme(s.Theme)
 	if s.Summary {
-		writeSummary(s)
+		for _, f := range s.Forms {
+			for _, g := range f.Groups {
+				writeGroupSummary(g, &surveyTheme)
+			}
+		}
 	}
 
 	ok := true
 	if len(s.Confirm.Title) > 0 {
-		confirm := huh.NewConfirm().
-			Title(s.Confirm.Title).
-			Description(s.Confirm.Description).
-			Value(&ok)
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title(strings.TrimSpace(s.Confirm.Title)).
+					Description(strings.TrimSpace(s.Confirm.Description)).
+					Value(&ok),
+			),
+		).WithTheme(&surveyTheme).WithAccessible(s.Accessible)
 
-		if err := confirm.Run(); err != nil {
+		if err := form.Run(); err != nil {
 			log.Fatal(err)
 		}
 
