@@ -21,6 +21,7 @@ const (
 
 var (
 	ErrUnsupportedFileExtension = fmt.Errorf("unsupported file extension, only .yaml, .yml and .json are supported")
+	LoggingEnabled              = false
 )
 
 type Survey struct {
@@ -92,14 +93,34 @@ type Confirm struct {
 	Description string `yaml:"description" json:"description"`
 }
 
+func (s Survey) Validate() error {
+	if s.Name == "" {
+		return fmt.Errorf("validation error, name is required")
+	}
+	if s.Version == "" {
+		return fmt.Errorf("validation error, version is required")
+	}
+	return nil
+}
+
 func (s *Survey) Run() error {
+	if LoggingEnabled {
+		log.Printf("reading questions from %s, writing answers to %s\n", s.path, s.Output)
+	}
+
+	if err := s.Validate(); err != nil {
+		return err
+	}
+
+	note := huh.NewNote().Title(fmt.Sprintf("%s, version %s", s.Name, s.Version))
+	description := strings.TrimSpace(s.Description)
+	if len(description) > 0 {
+		note.Description(description)
+	}
+
 	theme := getTheme(s.Theme)
 	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title(strings.TrimSpace(fmt.Sprintf("%s, version %s", s.Name, s.Version))).
-				Description(strings.TrimSpace(fmt.Sprintf("Reading questions from %s, writing answers to %s\n\n%s", s.path, s.Output, s.Description))),
-		),
+		huh.NewGroup(note),
 	).WithTheme(&theme).WithAccessible(s.Accessible)
 
 	if err := form.Run(); err != nil {
