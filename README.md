@@ -24,7 +24,8 @@ No real plan has formulated yet, but there are some key things missing
 - Support for password fields (input)
 - Command for reading (and formatting) answers
 - Validation
-- Show/Hide groups and forms based on conditions
+- Dynamic options
+- Show/Hide groups and fields based on conditions
 - vhs demo
 
 More ideas
