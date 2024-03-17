@@ -21,7 +21,7 @@ const (
 
 var (
 	ErrUnsupportedFileExtension = fmt.Errorf("unsupported file extension, only .yaml, .yml and .json are supported")
-	LoggingEnabled              = false
+	LoggingEnabled              = os.Getenv("DHUH_LOGGING_ENABLED") == "true"
 )
 
 type Survey struct {
