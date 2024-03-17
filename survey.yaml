@@ -17,6 +17,7 @@ forms:
             description: |
               This will be used in multiple places, so make sure it's a good name.
             required: true
+            default: "{{ .Env.USER }}"
           - key: projectDescription
             type: text
             title: What is the purpose of your project?
@@ -37,7 +38,7 @@ forms:
                 value: gcp
               - key: Digital Ocean
                 value: do
-            default: gcp
+            default: "{{ .Env.DEFAULT_CLOUD_PROVIDER }}"
             required: true
   - groups:
       - title: Options
@@ -49,7 +50,7 @@ forms:
             description: |
               This is the directory where the files will be generated.
               It should be a relative path from the current directory.
-            default: ./{{ index . "projectName" }}/
+            default: ./{{ .Answers.projectName }}/
             placeholder: ./path/to/your/project
             required: true
           - key: architectures
@@ -63,7 +64,7 @@ forms:
                 value: amd64
               - value: arm64
             default:
-              - arm64
+              - "{{ .Env.GOARCH }}"
             required: true
           - key: secretSauce
             type: confirm

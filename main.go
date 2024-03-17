@@ -27,6 +27,7 @@ var (
 type Survey struct {
 	path    string
 	answers map[string]interface{}
+	env     map[string]string
 
 	Name        string  `yaml:"name" json:"name"`
 	Version     string  `yaml:"version" json:"version"`
@@ -187,7 +188,7 @@ func (s Survey) NewInputField(f *Field) huh.Field {
 	switch f.Default.(type) {
 	case string:
 		value = f.Default.(string)
-		v, err := s.ParseTemplate(value, f.Key)
+		v, err := s.ExecTemplate(value, f.Key)
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +220,7 @@ func (s Survey) NewTextField(f *Field) huh.Field {
 	switch f.Default.(type) {
 	case string:
 		value = f.Default.(string)
-		v, err := s.ParseTemplate(value, f.Key)
+		v, err := s.ExecTemplate(value, f.Key)
 		if err != nil {
 			panic(err)
 		}
@@ -249,8 +250,12 @@ func (s Survey) NewSelectField(f *Field) huh.Field {
 	value := ""
 	switch f.Default.(type) {
 	case string:
-		df := f.Default.(string)
-		value = df
+		value = f.Default.(string)
+		v, err := s.ExecTemplate(value, f.Key)
+		if err != nil {
+			panic(err)
+		}
+		value = v
 	}
 	options := make([]huh.Option[string], 0)
 	for _, o := range f.Options {
@@ -297,8 +302,12 @@ func (s Survey) NewMultiSelectField(f *Field) huh.Field {
 	case []interface{}:
 		df := f.Default.([]interface{})
 		for _, v := range df {
-			if s, ok := v.(string); ok {
-				value = append(value, s)
+			if val, ok := v.(string); ok {
+				v, err := s.ExecTemplate(val, f.Key)
+				if err != nil {
+					panic(err)
+				}
+				value = append(value, v)
 			}
 		}
 	}
@@ -361,7 +370,7 @@ func (s Survey) NewConfirmField(f *Field) huh.Field {
 	return field
 }
 
-func (s *Survey) ParseTemplate(value string, key string) (string, error) {
+func (s *Survey) ExecTemplate(value string, key string) (string, error) {
 	if len(value) < 1 {
 		return value, nil
 	}
@@ -371,8 +380,13 @@ func (s *Survey) ParseTemplate(value string, key string) (string, error) {
 		return "", err
 	}
 
+	data := map[string]interface{}{
+		"Answers": s.answers,
+		"Env":     s.env,
+	}
+
 	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, s.answers)
+	err = tmpl.Execute(&buf, data)
 	if err != nil {
 		return "", err
 	}
@@ -419,6 +433,7 @@ func NewSurvey(path string) (Survey, error) {
 	s := Survey{
 		path:    path,
 		answers: map[string]interface{}{},
+		env:     envToMap(),
 	}
 
 	// Read the file
@@ -455,6 +470,15 @@ func NewSurvey(path string) (Survey, error) {
 
 	// Return the survey
 	return s, nil
+}
+
+func envToMap() map[string]string {
+	envMap := make(map[string]string)
+	for _, v := range os.Environ() {
+		parts := strings.SplitN(v, "=", 2)
+		envMap[parts[0]] = parts[1]
+	}
+	return envMap
 }
 
 func fileType(path string) string {
